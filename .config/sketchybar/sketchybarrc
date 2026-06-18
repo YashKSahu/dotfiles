@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+
+# ==========================================
+# 1. Global Bar Settings
+# ==========================================
+sketchybar --bar position=top \
+                 height=27 \
+                 margin=10 \
+                 y_offset=5 \
+                 corner_radius=10 \
+                 padding_left=10 \
+                 padding_right=10 \
+                 blur_radius=30 \
+                 color=0x80000000 \
+
+# ==========================================
+# 2. Default Item Settings
+# ==========================================
+# MOVED UP: This ensures Workspaces and Front App inherit these styles.
+default=(
+  padding_left=5
+  padding_right=5
+  icon.font="Hack Nerd Font:Regular:17.0"
+  label.font="SF Pro Display:Regular:13.0"
+  icon.color=0xffffffff
+  label.color=0xffffffff
+  icon.padding_left=4
+  icon.padding_right=4
+  label.padding_left=4
+  label.padding_right=4
+)
+sketchybar --default "${default[@]}"
+
+# ==========================================
+# 3. AeroSpace Workspaces (Left)
+# ==========================================
+sketchybar --add event aerospace_workspace_change
+
+for sid in {1..10}; do
+  sketchybar --add item "$sid" left \
+             --set "$sid" label.drawing=off \
+                          icon="$sid" \
+                          icon.font="Hack Nerd Font:Bold:13.0" \
+                          script="$PLUGIN_DIR/aerospace.sh" \
+                          click_script="aerospace workspace $sid" \
+                          padding_left=2 \
+                          padding_right=2 \
+                          background.corner_radius=5 \
+                          background.height=19 \
+                          icon.padding_left=8 \
+                          icon.padding_right=8 \
+             --subscribe "$sid" aerospace_workspace_change
+done
+
+# ==========================================
+# 4. Front App (Left)
+# ==========================================
+sketchybar --add item front_app left \
+           --set front_app icon.drawing=on \
+                           icon.padding_right=8 \
+                           padding_left=15 \
+                           script="$PLUGIN_DIR/front_app.sh" \
+           --subscribe front_app front_app_switched aerospace_workspace_change
+
+# ==========================================
+# 5. System Status Items (Right)
+# ==========================================
+# Clock
+sketchybar --add item clock right \
+           --set clock update_freq=10 \
+                       icon.drawing=off \
+                       script="$PLUGIN_DIR/clock.sh"
+
+# Wi-Fi Main
+sketchybar --add item wifi right \
+           --set wifi update_freq=5 \
+                      icon.font="Hack Nerd Font:Bold:16.0" \
+                      label.drawing=off \
+                      popup.align=right \
+                      popup.y_offset=6 \
+                      script="$PLUGIN_DIR/wifi.sh" \
+           --subscribe wifi wifi_change mouse.entered mouse.exited mouse.exited.global
+
+# Wi-Fi Tooltip (Grouped logically)
+sketchybar --add item wifi.tooltip popup.wifi \
+           --set wifi.tooltip icon.drawing=off \
+                              label.font="Hack Nerd Font:Bold:12.0" \
+                              label.color=0xffffffff \
+                              label.padding_left=10 \
+                              label.padding_right=10 \
+                              background.height=24 \
+                              background.color=0x40000000 \
+                              background.corner_radius=6 \
+                              background.border_width=1 \
+                              background.border_color=0x33ffffff \
+                              background.drawing=on
+
+# Battery
+sketchybar --add item battery right \
+           --set battery update_freq=120 \
+                         script="$PLUGIN_DIR/battery.sh" \
+           --subscribe battery system_woke power_source_change
+
+# Volume
+sketchybar --add item volume right \
+           --set volume script="$PLUGIN_DIR/volume.sh" \
+           --subscribe volume volume_change
+
+# CPU
+sketchybar --add item cpu right \
+           --set cpu update_freq=2 \
+                     icon= \
+                     script="$PLUGIN_DIR/cpu.sh"
+
+# GPU
+sketchybar --add item gpu right \
+           --set gpu update_freq=2 \
+                     icon="󰾲" \
+                     script="$PLUGIN_DIR/gpu.sh"
+# Disk
+sketchybar --add item disk right \
+           --set disk update_freq=2 \
+                      icon= \
+                      script="$PLUGIN_DIR/disk.sh"
+
+# ==========================================
+# 6. Initialization Routine
+# ==========================================
+sketchybar --update
+
+# Initialize AeroSpace state
+ACTIVE=$(aerospace list-workspaces --all)
+FOCUSED=$(aerospace list-workspaces --focused)
+sketchybar --trigger aerospace_workspace_change ACTIVE_WORKSPACES="$ACTIVE" FOCUSED_WORKSPACE="$FOCUSED"
+
+# Initialize Front App safely via native macOS command
+WINDOWS_IN_FOCUSED=$(aerospace list-windows --workspace "$FOCUSED")
+if [ -z "$WINDOWS_IN_FOCUSED" ]; then
+  sketchybar --trigger front_app_switched INFO=""
+else
+  INITIAL_APP=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true')
+  sketchybar --trigger front_app_switched INFO="$INITIAL_APP"
+fi
+
+# sketchybar --add item test_box center \
+#            --set test_box label="RED BOX TEST" \
+#                           background.color=0xffff0000 \
+#                           padding_left=400 \
+#                           padding_right=20
